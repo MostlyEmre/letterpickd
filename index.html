@@ -4,16 +4,216 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Letterpickd</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #14181c;
+        line-height: 1.6;
+      }
+
+      h1 {
+        text-align: center;
+        margin-top: 20px;
+        color: #fff;
+        letter-spacing: 1.5px;
+        font-family: Helvetica, Arial, sans-serif;
+      }
+
+      form {
+        max-width: 300px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #fff;
+        border-radius: 8px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 5px;
+      }
+
+      input[type="text"],
+      input[type="submit"] {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+      }
+
+      input[type="submit"] {
+        background: #40bcf4;
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      input[type="submit"]:hover {
+        background: #14181c;
+      }
+
+      #controls {
+        text-align: center;
+        margin: 20px;
+      }
+
+      #controls button {
+        padding: 10px 15px;
+        margin-right: 10px;
+        background: #40bcf4;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      #controls button:hover {
+        background: #555;
+      }
+
+      #results {
+        max-width: 800px;
+        margin: 20px auto;
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+      }
+
+      .movie {
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .movie-title {
+        margin: 0;
+        color: #0077cc;
+      }
+
+      .movie-link a {
+        color: #0077cc;
+        text-decoration: none;
+      }
+
+      .movie-link a:hover {
+        text-decoration: underline;
+      }
+    </style>
   </head>
   <body>
     <h1>letterpickd</h1>
     <form>
       <!-- enter username -->
       <label for="username">Username</label>
-      <input type="text" id="username" name="username" />
+      <input type="text" id="username" name="username" required />
 
       <!-- submit -->
       <input type="submit" value="Submit" />
     </form>
+    <div id="controls"></div>
+    <div id="results"></div>
+    <!-- send username to this webhook https://hook.us1.make.com/c3q854gp8fn6gdg2vq1eds58od37rqua -->
+    <script>
+      const form = document.querySelector("form");
+      const submitButton = form.querySelector('input[type="submit"]');
+      const results = document.querySelector("#results");
+      let allFilms = []; // Array to hold all film objects
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      async function fetchAndProcessPage(username, url, pageNo = 1) {
+        const response = await fetch(url);
+        const data = await response.text();
+        const parser = new DOMParser();
+        const html = parser.parseFromString(data, "text/html");
+
+        const filmElements = html.querySelectorAll(".film-poster");
+        const films = Array.from(filmElements).map((filmEl) => {
+          const filmId = filmEl.getAttribute("data-film-id");
+          const filmName = filmEl.querySelector("img").alt; // Extracting filmName from the alt attribute of img tag
+          const filmLink = filmEl.getAttribute("data-target-link");
+          const filmUrl = `https://letterboxd.com${filmLink}`; // Constructing filmUrl
+
+          return {
+            filmId,
+            filmUrl,
+            filmName,
+          };
+        });
+
+        allFilms = allFilms.concat(films);
+
+        // Check if there's a next page
+        const nextPageElement = html.querySelector(".paginate-nextprev:not(.paginate-disabled) > .next");
+        if (nextPageElement) {
+          const nextPageUrl = `https://letterpickd.emree.workers.dev/?url=https://letterboxd.com/${username}/watchlist/page/${pageNo + 1}/`;
+          await sleep(500); // Wait for 500ms before fetching the next page
+          await fetchAndProcessPage(username, nextPageUrl, pageNo + 1); // Recursive call for the next page
+        }
+      }
+
+      function addControlButtons() {
+        const controls = document.querySelector("#controls");
+        controls.innerHTML = `
+      <button id="pickOne">Pick 1 Movie</button>
+      <button id="pickThree">Pick 3 Movies</button>
+    `;
+
+        document.querySelector("#pickOne").addEventListener("click", () => pickMovies(1));
+        document.querySelector("#pickThree").addEventListener("click", () => pickMovies(3));
+      }
+
+      function pickMovies(count) {
+        let picked = [];
+        for (let i = 0; i < count; i++) {
+          const randomIndex = Math.floor(Math.random() * allFilms.length);
+          picked.push(allFilms[randomIndex]);
+        }
+
+        displayMovies(picked);
+      }
+
+      function displayMovies(movies) {
+        const results = document.querySelector("#results");
+        results.innerHTML = movies
+          .map(
+            (movie) => `
+      <div class="movie">
+        <h3 class="movie-title" data-id="${movie.filmId}"">${movie.filmName}</h3>
+        <p class="movie-link"><a href="${movie.filmUrl}" target="_blank">Link to Movie</a></p>
+      </div>
+    `
+          )
+          .join("");
+      }
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        submitButton.value = "Loading..."; // Change button text to "Loading..."
+        submitButton.disabled = true; // Disable the button
+        const username = document.querySelector("#username").value;
+        const proxyUrl = "https://letterpickd.emree.workers.dev/?url=";
+        const targetUrl = `https://letterboxd.com/${username}/watchlist/`;
+
+        allFilms = []; // Reset the array before starting
+
+        fetchAndProcessPage(username, proxyUrl + encodeURIComponent(targetUrl))
+          .then(() => {
+            console.log(allFilms); // Log all films after fetching all pages
+            addControlButtons(); // Add buttons after data is fetched
+            submitButton.value = "Submit"; // Change button text back to "Submit"
+            submitButton.disabled = false; // Re-enable the button
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            submitButton.value = "Submit"; // Change button text back to "Submit"
+            submitButton.disabled = false; // Re-enable the button
+          });
+      });
+    </script>
   </body>
 </html>
