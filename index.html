@@ -134,7 +134,7 @@
     <h1>letterpickd</h1>
     <form>
       <!-- enter username -->
-      <label for="username">Username</label>
+      <label for="username">Letterboxd Username</label>
       <input type="text" id="username" name="username" required />
 
       <!-- submit -->
@@ -231,7 +231,6 @@
 
         fetchAndProcessPage(username, proxyUrl + encodeURIComponent(targetUrl))
           .then(() => {
-            console.log(allFilms); // Log all films after fetching all pages
             addControlButtons(); // Add buttons after data is fetched
             submitButton.value = "Submit"; // Change button text back to "Submit"
             submitButton.disabled = false; // Re-enable the button
